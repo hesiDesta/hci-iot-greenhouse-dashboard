@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Dasbor Monitoring Greenhouse Cerdas</title>
+<style>
+:root{--bg:#fff;--fg:#1a1a1a;--muted:#4d5258;--card:#f4f5f7;--border:#b9bec6;--accent:#0b5cad;
+--band:#e3f1e6;--zA:#0b5cad;--zB:#a84f00;--zC:#7a2a8f;--warn:#8a3b00;--ok:#1b6b2f;--warnbg:#fff1e0}
+@media (prefers-color-scheme:dark){:root{--bg:#121417;--fg:#f1f1f1;--muted:#b8bcc2;--card:#1c2025;
+--border:#444a52;--accent:#6cb2ff;--band:#1d3324;--zA:#6cb2ff;--zB:#ffb454;--zC:#d9a0ff;--warn:#ffd08a;--ok:#7fd99a;--warnbg:#3a2a12}}
+*{box-sizing:border-box}
+body{margin:0;font:16px/1.5 system-ui,Segoe UI,Arial,sans-serif;background:var(--bg);color:var(--fg)}
+.skip{position:absolute;left:-999px}.skip:focus{left:8px;top:8px;background:var(--bg);padding:8px;z-index:9}
+header,main{max-width:960px;margin:0 auto;padding:0 16px}
+header{padding-top:16px}h1{font-size:1.5rem;margin:0}.sub{color:var(--muted);margin:4px 0 0}
+h2{font-size:1.1rem;margin:24px 0 8px}
+:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px}
+.kpi{background:var(--card);border:2px solid var(--border);border-radius:8px;padding:12px;text-align:left;
+color:var(--fg);font:inherit;cursor:pointer}
+.kpi[aria-pressed=true]{border-color:var(--accent)}
+.kpi .n{font-size:1.8rem;font-weight:700;display:block}.kpi .l{color:var(--muted)}
+.ok{color:var(--ok)}.bad{color:var(--warn);font-weight:700}
+.filters{display:flex;flex-wrap:wrap;gap:12px;align-items:end}
+label{display:flex;flex-direction:column;font-size:.9rem;color:var(--muted)}
+select,button.act{font:inherit;padding:8px 10px;min-height:44px;border:2px solid var(--border);border-radius:6px;background:var(--bg);color:var(--fg)}
+button.act{cursor:pointer;font-weight:600}
+#chart-wrap{background:var(--card);border:1px solid var(--border);border-radius:8px;padding:8px}
+svg{width:100%;height:auto;display:block;touch-action:pan-y}
+svg text{fill:var(--fg);font-size:12px}.muted{fill:var(--muted)!important}
+.help{color:var(--muted);font-size:.9rem;margin:6px 0 0}
+table{border-collapse:collapse;width:100%;font-size:.95rem}
+th,td{border-bottom:1px solid var(--border);padding:6px 8px;text-align:left}
+th{color:var(--muted);font-weight:600}
+.panel{background:var(--card);border:1px solid var(--border);border-radius:8px;padding:12px;overflow-x:auto}
+.legend{display:flex;gap:16px;flex-wrap:wrap;margin:8px 0 0}
+.legend span{display:inline-flex;align-items:center;gap:6px;white-space:nowrap}.legend svg{flex:none;width:34px}
+footer{max-width:960px;margin:24px auto;padding:0 16px;color:var(--muted);font-size:.9rem}
+</style>
+</head>
+<body>
+<a class="skip" href="#grafik">Lewati ke grafik</a>
+<header>
+<h1>Dasbor Monitoring Greenhouse Cerdas</h1>
+<p class="sub">Data sensor IoT per jam, 3 zona. Data terakhir: <span id="last"></span></p>
+</header>
+<main>
+<section aria-labelledby="h1s">
+<h2 id="h1s">1. Ringkasan kondisi terkini</h2>
+<div id="kpis" class="kpis" role="group" aria-label="Pilih sensor untuk ditampilkan pada grafik"></div>
+</section>
+
+<section aria-labelledby="h2s">
+<h2 id="h2s">2. Saring tampilan</h2>
+<div class="filters">
+<label for="f-zona">Zona
+<select id="f-zona"><option value="all">Semua zona</option><option>A</option><option>B</option><option>C</option></select></label>
+<label for="f-range">Rentang waktu
+<select id="f-range"><option value="24">24 jam terakhir</option><option value="72">3 hari terakhir</option><option value="168" selected>7 hari terakhir</option></select></label>
+<label for="f-sensor">Sensor
+<select id="f-sensor"></select></label>
+<button class="act" id="export" type="button">Ekspor data (CSV)</button>
+</div>
+</section>
+
+<section id="grafik" aria-labelledby="h3s">
+<h2 id="h3s">3. Tren sensor</h2>
+<div id="chart-wrap" tabindex="0" aria-describedby="chart-help" aria-label="Grafik garis tren sensor">
+<svg id="chart" viewBox="0 0 800 320" role="img" aria-label=""></svg>
+</div>
+<div class="legend" id="legend"></div>
+<p class="help" id="chart-help">Arahkan kursor, ketuk grafik, atau fokus lalu tekan panah kiri/kanan untuk melihat detail pada waktu tertentu. Area hijau adalah rentang normal.</p>
+</section>
+
+<section aria-labelledby="h4s">
+<h2 id="h4s">4. Detail waktu terpilih</h2>
+<div class="panel" id="detail" aria-live="polite"></div>
+</section>
+
+<section aria-labelledby="h5s">
+<h2 id="h5s">5. Peringatan terbaru (di luar rentang normal)</h2>
+<div class="panel" id="alerts"></div>
+</section>
+</main>
+<footer>Studi kasus HCI dan visualisasi data untuk IoT. Data pada demo ini adalah simulasi.</footer>
+
+<script>
+const DATA = /*__DATA__*/[];
+const SENS = {
+  suhu:{label:"Suhu udara",unit:"°C",lo:20,hi:30,dec:1},
+  kelembapan_udara:{label:"Kelembapan udara",unit:"%",lo:55,hi:80,dec:0},
+  kelembapan_tanah:{label:"Kelembapan tanah",unit:"%",lo:40,hi:70,dec:0}
+};
+const ZONES=["A","B","C"];
+const ZSTYLE={A:{c:"var(--zA)",d:""},B:{c:"var(--zB)",d:"7 4"},C:{c:"var(--zC)",d:"2 3"}};
+const state={zona:"all",range:168,sensor:"suhu",idx:null};
+const times=[...new Set(DATA.map(d=>d.waktu))].sort();
+const map={};DATA.forEach(d=>map[d.waktu+"|"+d.zona]=d);
+const $=id=>document.getElementById(id);
+const fmt=(v,s)=>v.toFixed(SENS[s].dec)+" "+SENS[s].unit;
+function stat(v,s){const t=SENS[s];return v<t.lo?{k:"low",t:"▼ Terlalu rendah"}:v>t.hi?{k:"high",t:"▲ Terlalu tinggi"}:{k:"ok",t:"✓ Normal"}}
+const vTimes=()=>times.slice(-state.range);
+const vZones=()=>state.zona==="all"?ZONES:[state.zona];
+const tlabel=t=>{const [d,h]=t.split(" ");const [y,m,dd]=d.split("-");return dd+"/"+m+" "+h}
+
+function renderKPIs(){
+  const t=times[times.length-1];let h="";
+  for(const s in SENS){
+    const vals=vZones().map(z=>map[t+"|"+z][s]);
+    const avg=vals.reduce((a,b)=>a+b,0)/vals.length;
+    const out=vals.filter(v=>stat(v,s).k!=="ok").length;
+    h+=`<button class="kpi" data-s="${s}" aria-pressed="${state.sensor===s}">
+    <span class="l">${SENS[s].label}</span><span class="n">${fmt(avg,s)}</span>
+    <span class="${out?"bad":"ok"}">${out?"▲ "+out+" dari "+vals.length+" zona di luar rentang":"✓ Semua zona normal"}</span></button>`;
+  }
+  $("kpis").innerHTML=h;
+  $("kpis").querySelectorAll("button").forEach(b=>b.onclick=()=>{state.sensor=b.dataset.s;$("f-sensor").value=state.sensor;renderAll()});
+}
+
+function renderChart(){
+  const s=state.sensor,T=SENS[s],ts=vTimes(),zs=vZones();
+  const W=800,H=320,L=48,R=40,Tp=14,B=32,pw=W-L-R,ph=H-Tp-B;
+  let all=[];zs.forEach(z=>ts.forEach(t=>all.push(map[t+"|"+z][s])));
+  let lo=Math.min(T.lo,...all),hi=Math.max(T.hi,...all);const pad=(hi-lo)*.08;lo-=pad;hi+=pad;
+  const X=i=>L+(ts.length<2?0:i*pw/(ts.length-1)),Y=v=>Tp+ph-(v-lo)/(hi-lo)*ph;
+  let g="";
+  g+=`<rect x="${L}" y="${Y(T.hi)}" width="${pw}" height="${Y(T.lo)-Y(T.hi)}" fill="var(--band)"/>`;
+  for(let k=0;k<=4;k++){const v=lo+(hi-lo)*k/4,y=Y(v);
+    g+=`<line x1="${L}" x2="${L+pw}" y1="${y}" y2="${y}" stroke="var(--border)" stroke-width=".5"/><text class="muted" x="${L-6}" y="${y+4}" text-anchor="end">${v.toFixed(T.dec)}</text>`}
+  const step=state.range===24?4:state.range===72?12:24;
+  ts.forEach((t,i)=>{if(i%step===0)g+=`<text class="muted" x="${X(i)}" y="${H-10}" text-anchor="middle">${state.range>24?t.slice(8,10)+"/"+t.slice(5,7):t.slice(11)}</text>`});
+  g+=`<text class="muted" x="${L}" y="10">${T.label} (${T.unit})</text>`;
+  zs.forEach(z=>{
+    const pts=ts.map((t,i)=>X(i)+","+Y(map[t+"|"+z][s])).join(" ");
+    g+=`<polyline points="${pts}" fill="none" stroke="${ZSTYLE[z].c}" stroke-width="2" stroke-dasharray="${ZSTYLE[z].d}"/>`;
+    ts.forEach((t,i)=>{const v=map[t+"|"+z][s];if(stat(v,s).k!=="ok")g+=`<circle cx="${X(i)}" cy="${Y(v)}" r="3" fill="var(--bg)" stroke="${ZSTYLE[z].c}" stroke-width="2"/>`});
+  });
+  const ends=zs.map(z=>({z,y:Y(map[ts[ts.length-1]+"|"+z][s])})).sort((a,b)=>a.y-b.y);
+  for(let k=1;k<ends.length;k++)if(ends[k].y-ends[k-1].y<14)ends[k].y=ends[k-1].y+14;
+  ends.forEach(e=>g+=`<text x="${L+pw+6}" y="${e.y+4}" style="fill:${ZSTYLE[e.z].c};font-weight:700">${e.z}</text>`);
+  if(state.idx===null||state.idx>=ts.length)state.idx=ts.length-1;
+  g+=`<line x1="${X(state.idx)}" x2="${X(state.idx)}" y1="${Tp}" y2="${Tp+ph}" stroke="var(--fg)" stroke-width="1" stroke-dasharray="3 3"/>`;
+  const svg=$("chart");svg.innerHTML=g;
+  const last=zs.map(z=>z+" "+fmt(map[ts[ts.length-1]+"|"+z][s],s)).join(", ");
+  svg.setAttribute("aria-label",`Grafik garis ${T.label}, ${ts.length} jam terakhir. Nilai terakhir: ${last}. Rentang normal ${T.lo} sampai ${T.hi} ${T.unit}.`);
+  svg._X=X;svg._n=ts.length;svg._pw=pw;svg._L=L;
+  $("legend").innerHTML=zs.map(z=>`<span><svg width="34" height="10" aria-hidden="true"><line x1="0" x2="34" y1="5" y2="5" stroke="${ZSTYLE[z].c}" stroke-width="2" stroke-dasharray="${ZSTYLE[z].d}"/></svg>Zona ${z}</span>`).join("")+`<span>○ titik di luar rentang normal</span>`;
+}
+
+function renderDetail(){
+  const ts=vTimes(),t=ts[state.idx];
+  let h=`<strong>${tlabel(t)}</strong><table><thead><tr><th scope="col">Zona</th>`;
+  for(const s in SENS)h+=`<th scope="col">${SENS[s].label}</th>`;
+  h+="</tr></thead><tbody>";
+  vZones().forEach(z=>{h+=`<tr><th scope="row">${z}</th>`;
+    for(const s in SENS){const v=map[t+"|"+z][s],st=stat(v,s);h+=`<td class="${st.k==="ok"?"ok":"bad"}">${fmt(v,s)} · ${st.t}</td>`}
+    h+="</tr>"});
+  $("detail").innerHTML=h+"</tbody></table>";
+}
+
+function renderAlerts(){
+  const rows=[];
+  vTimes().forEach(t=>vZones().forEach(z=>{for(const s in SENS){const v=map[t+"|"+z][s],st=stat(v,s);if(st.k!=="ok")rows.push({t,z,s,v,st})}}));
+  if(!rows.length){$("alerts").innerHTML='<span class="ok">✓ Tidak ada peringatan pada rentang ini.</span>';return}
+  const sh=rows.slice(-8).reverse();
+  let h=`<p>${rows.length} pembacaan di luar rentang. Menampilkan 8 terbaru.</p><table><thead><tr><th scope="col">Waktu</th><th scope="col">Zona</th><th scope="col">Sensor</th><th scope="col">Nilai</th><th scope="col">Status</th></tr></thead><tbody>`;
+  sh.forEach(r=>h+=`<tr><td>${tlabel(r.t)}</td><td>${r.z}</td><td>${SENS[r.s].label}</td><td>${fmt(r.v,r.s)}</td><td class="bad">${r.st.t}</td></tr>`);
+  $("alerts").innerHTML=h+"</tbody></table>";
+}
+
+function renderAll(){$("last").textContent=tlabel(times[times.length-1]);renderKPIs();renderChart();renderDetail();renderAlerts()}
+
+$("f-sensor").innerHTML=Object.keys(SENS).map(s=>`<option value="${s}">${SENS[s].label}</option>`).join("");
+$("f-zona").onchange=e=>{state.zona=e.target.value;state.idx=null;renderAll()};
+$("f-range").onchange=e=>{state.range=+e.target.value;state.idx=null;renderAll()};
+$("f-sensor").onchange=e=>{state.sensor=e.target.value;renderAll()};
+function pick(clientX){const svg=$("chart"),r=svg.getBoundingClientRect(),x=(clientX-r.left)/r.width*800;
+  const i=Math.round((x-svg._L)/svg._pw*(svg._n-1));state.idx=Math.max(0,Math.min(svg._n-1,i));renderChart();renderDetail()}
+$("chart").addEventListener("pointermove",e=>pick(e.clientX));
+$("chart").addEventListener("click",e=>pick(e.clientX));
+$("chart-wrap").addEventListener("keydown",e=>{
+  if(e.key==="ArrowLeft"||e.key==="ArrowRight"){e.preventDefault();const n=vTimes().length;
+    state.idx=Math.max(0,Math.min(n-1,state.idx+(e.key==="ArrowLeft"?-1:1)));renderChart();renderDetail()}});
+$("export").onclick=()=>{
+  const ts=new Set(vTimes()),zs=new Set(vZones());
+  const rows=DATA.filter(d=>ts.has(d.waktu)&&zs.has(d.zona));
+  const csv="waktu,zona,suhu,kelembapan_udara,kelembapan_tanah\n"+rows.map(d=>[d.waktu,d.zona,d.suhu,d.kelembapan_udara,d.kelembapan_tanah].join(",")).join("\n");
+  const a=document.createElement("a");a.href=URL.createObjectURL(new Blob([csv],{type:"text/csv"}));a.download="data_greenhouse.csv";a.click();
+};
+renderAll();
+</script>
+</body>
+</html>

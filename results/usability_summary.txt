@@ -1,0 +1,22 @@
+RINGKASAN UJI USABILITY (data contoh/simulasi bila belum diganti data nyata)
+
+Per tugas:
+          success_rate       waktu_rata2       
+rancangan         Lama   UCD        Lama    UCD
+tugas                                          
+T1                0.88  1.00       22.62  10.14
+T2                0.75  1.00       54.02  13.90
+T3                0.38  1.00       73.97  18.31
+T4                0.75  0.88       55.58  14.32
+
+Keseluruhan:
+           success_rate  waktu_rata2_detik
+rancangan                                 
+Lama               0.69              51.55
+UCD                0.97              14.17
+
+Skor SUS (0-100; di atas 68 dianggap di atas rata-rata):
+           mean  std
+rancangan           
+Lama       50.0  6.0
+UCD        82.8  5.6
